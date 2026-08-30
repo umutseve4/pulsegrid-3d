@@ -67,7 +67,8 @@ async function load(){
     if(await evaluate("document.readyState === 'complete' && Boolean(document.querySelector('#pipeline-table tr'))"))return;
     await sleep(250);
   }
-  throw new Error('Application did not become ready');
+  const readiness=await evaluate(`(() => ({href:location.href,title:document.title,readyState:document.readyState,rows:document.querySelectorAll('#pipeline-table tr').length,body:document.body?.innerText.slice(0,240)}))()`);
+  throw new Error(`Application did not become ready: ${JSON.stringify(readiness)}`);
 }
 function assert(condition,message){if(!condition)throw new Error(message);console.log(`PASS: ${message}`);}
 
