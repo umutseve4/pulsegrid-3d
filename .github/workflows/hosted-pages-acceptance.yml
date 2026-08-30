@@ -30,7 +30,9 @@ jobs:
           node-version: '22'
       - name: Verify current hosted deployment metadata
         run: |
-          node --input-type=module <<'NODE'
+          set +e
+          set -o pipefail
+          node --input-type=module <<'NODE' 2>&1 | tee metadata-evidence.log
           const url = new URL('deployment.json', process.env.TARGET_URL);
           url.searchParams.set('run', process.env.EXPECTED_RUN_ID);
           const expected = {
@@ -59,5 +61,26 @@ jobs:
           }
           throw lastError;
           NODE
+          status=$?
+          set -e
+          {
+            echo '## Hosted deployment metadata'
+            echo '```json'
+            cat metadata-evidence.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
       - name: Exercise the hosted runtime in Chrome
-        run: node scripts/hosted-browser-acceptance.mjs
+        run: |
+          set +e
+          set -o pipefail
+          node scripts/hosted-browser-acceptance.mjs 2>&1 | tee browser-evidence.log
+          status=$?
+          set -e
+          {
+            echo '## Hosted Chrome acceptance'
+            echo '```text'
+            cat browser-evidence.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
