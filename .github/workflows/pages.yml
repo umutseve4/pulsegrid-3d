@@ -12,6 +12,7 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
+# This workflow also serves as the auditable one-time retrigger after repository-level Pages enablement.
 jobs:
   build:
     runs-on: ubuntu-latest
