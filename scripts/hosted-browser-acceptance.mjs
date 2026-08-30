@@ -14,6 +14,8 @@ function launch(command, args) {
   processes.push(child);
   child.stdout.on('data', (data) => process.stdout.write(data));
   child.stderr.on('data', (data) => process.stderr.write(data));
+  child.on('error', (error) => console.error(`DIAGNOSTIC: Chrome spawn error: ${error.message}`));
+  child.on('exit', (code, signal) => console.error(`DIAGNOSTIC: Chrome exited code=${code} signal=${signal}`));
   return child;
 }
 async function waitFor(url, attempts = 60) {
@@ -34,12 +36,17 @@ function assert(condition, message) {
 const pageResponse = await waitFor(targetUrl);
 assert(pageResponse.url === targetUrl, `hosted URL resolves without redirect (${targetUrl})`);
 const profile = await mkdtemp(join(tmpdir(), 'pulsegrid-hosted-chrome-'));
-launch('google-chrome', [
+const chrome = launch('google-chrome', [
   '--headless=new', '--no-sandbox', '--disable-dev-shm-usage',
   '--use-angle=swiftshader', '--remote-debugging-port=9222',
   `--user-data-dir=${profile}`, 'about:blank'
 ]);
-await waitFor('http://127.0.0.1:9222/json/version');
+try {
+  await waitFor('http://127.0.0.1:9222/json/version');
+} catch (error) {
+  console.error(`DIAGNOSTIC: Chrome pid=${chrome.pid} exitCode=${chrome.exitCode} signalCode=${chrome.signalCode} killed=${chrome.killed}`);
+  throw error;
+}
 const targets = await (await fetch('http://127.0.0.1:9222/json/list')).json();
 const page = targets.find((item) => item.type === 'page' && item.url === 'about:blank')
   ?? targets.find((item) => item.type === 'page');
