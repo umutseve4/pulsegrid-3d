@@ -12,7 +12,6 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
-# This workflow also serves as the auditable one-time retrigger after repository-level Pages enablement.
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -24,13 +23,47 @@ jobs:
           node-version: '22'
       - run: npm ci --ignore-scripts
       - run: npm run check
-      - run: npm run build
-      - name: Write deployment provenance
+      - name: Write deployment metadata source
         env:
           COMMIT_SHA: ${{ github.sha }}
           RUN_ID: ${{ github.run_id }}
         run: |
-          printf '{"commit_sha":"%s","workflow_run_id":"%s"}\n' "$COMMIT_SHA" "$RUN_ID" > dist/deployment.json
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$COMMIT_SHA"
+          mkdir -p public
+          node --input-type=module <<'NODE'
+          import { writeFile } from 'node:fs/promises';
+
+          const payload = {
+            commit_sha: process.env.COMMIT_SHA,
+            workflow_run_id: process.env.RUN_ID
+          };
+          await writeFile('public/deployment.json', `${JSON.stringify(payload)}\n`);
+          NODE
+      - run: npm run build
+      - name: Verify Pages artifact metadata
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+
+          const expected = `${JSON.stringify({
+            commit_sha: process.env.COMMIT_SHA,
+            workflow_run_id: process.env.RUN_ID
+          })}\n`;
+          const [source, artifact] = await Promise.all([
+            readFile('public/deployment.json', 'utf8'),
+            readFile('dist/deployment.json', 'utf8')
+          ]);
+          if (source !== expected || artifact !== expected) {
+            throw new Error('Deployment metadata does not match the current commit and workflow run.');
+          }
+          await readFile('dist/index.html', 'utf8');
+          console.log(artifact.trim());
+          NODE
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa
         with:
@@ -49,3 +82,43 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e
+      - name: Verify live deployment metadata
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          node --input-type=module <<'NODE'
+          const base = process.env.PAGE_URL.endsWith('/')
+            ? process.env.PAGE_URL
+            : `${process.env.PAGE_URL}/`;
+          const url = new URL('deployment.json', base);
+          url.searchParams.set('run', process.env.RUN_ID);
+          const expected = {
+            commit_sha: process.env.COMMIT_SHA,
+            workflow_run_id: process.env.RUN_ID
+          };
+
+          let lastError;
+          for (let attempt = 1; attempt <= 24; attempt += 1) {
+            try {
+              const response = await fetch(url, { cache: 'no-store' });
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              const actual = await response.json();
+              if (
+                actual.commit_sha !== expected.commit_sha ||
+                actual.workflow_run_id !== expected.workflow_run_id ||
+                Object.keys(actual).sort().join(',') !== 'commit_sha,workflow_run_id'
+              ) {
+                throw new Error(`metadata mismatch: ${JSON.stringify(actual)}`);
+              }
+              console.log(JSON.stringify(actual));
+              process.exit(0);
+            } catch (error) {
+              lastError = error;
+              console.log(`Attempt ${attempt}/24 failed: ${error.message}`);
+              if (attempt < 24) await new Promise((resolve) => setTimeout(resolve, 5000));
+            }
+          }
+          throw lastError;
+          NODE
