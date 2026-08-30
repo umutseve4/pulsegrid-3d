@@ -159,6 +159,7 @@ try {
   }))()`);
   assert(fallback.canvasHidden && fallback.fallbackVisible && fallback.controls,
     'WebGL failure preserves the hosted accessible fallback and incident controls');
+  if (runtimeErrors.length > 0) console.error(`DIAGNOSTIC_RUNTIME_ERRORS=${JSON.stringify(runtimeErrors)}`);
   assert(runtimeErrors.length === 0, `hosted runtime produced no console/page errors (${runtimeErrors.length})`);
   console.log(JSON.stringify({ target_url: targetUrl, checks: 10, runtime_errors: runtimeErrors.length }));
 } finally {
