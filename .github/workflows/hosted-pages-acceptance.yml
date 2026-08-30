@@ -142,12 +142,12 @@ jobs:
           {
             echo "## Hosted Pages Acceptance #$HOSTED_RUN_NUMBER evidence"
             echo
-            echo "- Hosted run: \\0060$HOSTED_RUN_ID\`"
-            echo "- Production job: \\0060$hosted_job_id\`"
-            echo "- Trigger: \\0060workflow_run\` from Deploy Pages run \\0060$EXPECTED_RUN_ID\`"
-            echo "- Tested commit: \\0060$EXPECTED_SHA\`"
-            echo "- CI run: \\0060$ci_run_id\`, conclusion \\0060success\`"
-            echo "- Pages deployment: \\0060$deployment_id\`, status \\0060$deployment_state\` (status ID \\0060$deployment_status_id\`)"
+            echo "- Hosted run: \`$HOSTED_RUN_ID\`"
+            echo "- Production job: \`$hosted_job_id\`"
+            echo "- Trigger: \`workflow_run\` from Deploy Pages run \`$EXPECTED_RUN_ID\`"
+            echo "- Tested commit: \`$EXPECTED_SHA\`"
+            echo "- CI run: \`$ci_run_id\`, conclusion \`success\`"
+            echo "- Pages deployment: \`$deployment_id\`, status \`$deployment_state\` (status ID \`$deployment_status_id\`)"
             echo
             echo '### CI jobs'
             printf '%s\n' "$ci_jobs"
