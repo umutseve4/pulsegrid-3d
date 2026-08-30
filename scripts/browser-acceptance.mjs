@@ -5,6 +5,18 @@ import { join } from 'node:path';
 
 const sleep=(ms)=>new Promise(resolve=>setTimeout(resolve,ms));
 const processes=[];
+let failureReported=false;
+function cleanup(){for(const child of processes)child.kill('SIGTERM');}
+function reportFailure(error){
+  if(failureReported)return;
+  failureReported=true;
+  const detail=String(error?.stack??error).replaceAll('%','%25').replaceAll('\r','%0D').replaceAll('\n','%0A');
+  console.error(`::error title=Browser acceptance failed::${detail}`);
+  cleanup();
+  process.exitCode=1;
+}
+process.once('uncaughtException',reportFailure);
+process.once('unhandledRejection',reportFailure);
 function launch(command,args){
   const child=spawn(command,args,{stdio:['ignore','pipe','pipe']});
   processes.push(child);
@@ -112,5 +124,5 @@ try{
   assert(fallback.canvasHidden && fallback.fallbackVisible && fallback.controls,'WebGL failure preserves the accessible fallback and incident controls');
 } finally {
   socket.close();
-  for(const child of processes)child.kill('SIGTERM');
+  cleanup();
 }
