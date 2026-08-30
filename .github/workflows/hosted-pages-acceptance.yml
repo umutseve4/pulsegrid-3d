@@ -6,7 +6,9 @@ on:
     types: [completed]
 
 permissions:
+  actions: read
   contents: read
+  issues: write
 
 concurrency:
   group: hosted-pages-acceptance
@@ -84,3 +86,57 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
+      - name: Publish durable acceptance evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HOSTED_RUN_ID: ${{ github.run_id }}
+          HOSTED_RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          test -s metadata-evidence.log
+          test -s browser-evidence.log
+
+          hosted_job_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$HOSTED_RUN_ID/jobs" --jq 'first(.jobs[] | select(.name == "production") | .id)')"
+          deployment_id="$(gh api "repos/$GITHUB_REPOSITORY/deployments?sha=$EXPECTED_SHA&environment=github-pages&per_page=1" --jq '.[0].id')"
+          deployment_status="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=1" --jq '.[0] | [.id, .state] | @tsv')"
+          ci_run="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$EXPECTED_SHA&event=push&per_page=1" --jq '.workflow_runs[0] | [.id, .conclusion] | @tsv')"
+          ci_run_id="${ci_run%%$'\t'*}"
+          ci_conclusion="${ci_run#*$'\t'}"
+          ci_jobs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ci_run_id/jobs?per_page=100" --jq '.jobs | sort_by(.name)[] | "- \(.name): job `\(.id)`, conclusion `\(.conclusion)`"')"
+          deployment_status_id="${deployment_status%%$'\t'*}"
+          deployment_state="${deployment_status#*$'\t'}"
+
+          [[ "$hosted_job_id" =~ ^[0-9]+$ ]]
+          [[ "$deployment_id" =~ ^[0-9]+$ ]]
+          [[ "$deployment_status_id" =~ ^[0-9]+$ ]]
+          [[ "$ci_run_id" =~ ^[0-9]+$ ]]
+          test "$deployment_state" = success
+          test "$ci_conclusion" = success
+          test "$(printf '%s\n' "$ci_jobs" | grep -c 'conclusion `success`')" -eq 5
+
+          evidence_file="$(mktemp)"
+          {
+            echo "## Hosted Pages Acceptance #$HOSTED_RUN_NUMBER evidence"
+            echo
+            echo "- Hosted run: \`$HOSTED_RUN_ID\`"
+            echo "- Production job: \`$hosted_job_id\`"
+            echo "- Trigger: \`workflow_run\` from Deploy Pages run \`$EXPECTED_RUN_ID\`"
+            echo "- Tested commit: \`$EXPECTED_SHA\`"
+            echo "- CI run: \`$ci_run_id\`, conclusion \`$ci_conclusion\`"
+            echo "- Pages deployment: \`$deployment_id\`, status \`$deployment_state\` (status ID \`$deployment_status_id\`)"
+            echo
+            echo '### CI jobs'
+            printf '%s\n' "$ci_jobs"
+            echo
+            echo '### Hosted deployment metadata'
+            echo '```text'
+            cat metadata-evidence.log
+            echo '```'
+            echo
+            echo '### Hosted Chrome acceptance'
+            echo '```text'
+            cat browser-evidence.log
+            echo '```'
+          } > "$evidence_file"
+
+          gh issue comment 19 --repo "$GITHUB_REPOSITORY" --body-file "$evidence_file"
