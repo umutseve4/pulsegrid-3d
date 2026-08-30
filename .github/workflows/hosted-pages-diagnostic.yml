@@ -32,7 +32,7 @@ jobs:
           log_file="$(mktemp)"
           diagnostic_script="$(mktemp --suffix=.mjs)"
           cp scripts/hosted-browser-acceptance.mjs "$diagnostic_script"
-          sed -i "/const identity = await evaluate/a\\  console.log(JSON.stringify({ diagnostic_identity: identity, target_url: targetUrl }));" "$diagnostic_script"
+          sed -i "/const identity = await evaluate/a\\  console.log('DIAGNOSTIC_IDENTITY_BASE64=' + Buffer.from(JSON.stringify({ diagnostic_identity: identity, target_url: targetUrl })).toString('base64'));" "$diagnostic_script"
           status=0
           node "$diagnostic_script" 2>&1 | tee "$log_file" || status=${PIPESTATUS[0]}
           if [[ "$status" -ne 0 ]]; then
