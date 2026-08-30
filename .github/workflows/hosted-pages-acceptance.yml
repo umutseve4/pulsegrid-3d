@@ -8,6 +8,7 @@ on:
 permissions:
   actions: read
   contents: read
+  deployments: read
   issues: write
 
 concurrency:
@@ -97,22 +98,45 @@ jobs:
           test -s browser-evidence.log
 
           hosted_job_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$HOSTED_RUN_ID/jobs" --jq 'first(.jobs[] | select(.name == "production") | .id)')"
-          deployment_id="$(gh api "repos/$GITHUB_REPOSITORY/deployments?sha=$EXPECTED_SHA&environment=github-pages&per_page=1" --jq '.[0].id')"
-          deployment_status="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=1" --jq '.[0] | [.id, .state] | @tsv')"
-          ci_run="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$EXPECTED_SHA&event=push&per_page=1" --jq '.workflow_runs[0] | [.id, .conclusion] | @tsv')"
-          ci_run_id="${ci_run%%$'\t'*}"
-          ci_conclusion="${ci_run#*$'\t'}"
-          ci_jobs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ci_run_id/jobs?per_page=100" --jq '.jobs | sort_by(.name)[] | "- \(.name): job `\(.id)`, conclusion `\(.conclusion)`"')"
-          deployment_status_id="${deployment_status%%$'\t'*}"
-          deployment_state="${deployment_status#*$'\t'}"
-
           [[ "$hosted_job_id" =~ ^[0-9]+$ ]]
+
+          deployment_id=''
+          deployment_status_id=''
+          deployment_state=''
+          for attempt in {1..12}; do
+            gh api "repos/$GITHUB_REPOSITORY/deployments?sha=$EXPECTED_SHA&environment=github-pages&per_page=10" > deployments.json
+            while IFS= read -r candidate_id; do
+              gh api "repos/$GITHUB_REPOSITORY/deployments/$candidate_id/statuses?per_page=1" > deployment-statuses.json
+              if jq -e --arg run_path "/actions/runs/$EXPECTED_RUN_ID" '((.[0].state // "") == "success") and ((.[0].log_url // "") | contains($run_path))' deployment-statuses.json > /dev/null; then
+                deployment_id="$candidate_id"
+                deployment_status_id="$(jq -r '.[0].id' deployment-statuses.json)"
+                deployment_state="$(jq -r '.[0].state' deployment-statuses.json)"
+                break
+              fi
+            done < <(jq -r '.[].id' deployments.json)
+            if [[ -n "$deployment_id" ]]; then break; fi
+            if [[ "$attempt" -lt 12 ]]; then sleep 5; fi
+          done
+
           [[ "$deployment_id" =~ ^[0-9]+$ ]]
           [[ "$deployment_status_id" =~ ^[0-9]+$ ]]
-          [[ "$ci_run_id" =~ ^[0-9]+$ ]]
           test "$deployment_state" = success
-          test "$ci_conclusion" = success
-          test "$(printf '%s\n' "$ci_jobs" | grep -c 'conclusion `success`')" -eq 5
+
+          ci_run_id=''
+          for attempt in {1..12}; do
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$EXPECTED_SHA&branch=main&event=push&per_page=10" > ci-runs.json
+            ci_run_id="$(jq -r --arg sha "$EXPECTED_SHA" 'first(.workflow_runs[] | select(.head_sha == $sha and .head_branch == "main" and .event == "push" and .conclusion == "success") | .id) // empty' ci-runs.json)"
+            if [[ "$ci_run_id" =~ ^[0-9]+$ ]]; then
+              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ci_run_id/jobs?per_page=100" > ci-jobs.json
+              if jq -e '(.total_count == 5) and (.jobs | length == 5) and all(.jobs[]; .conclusion == "success")' ci-jobs.json > /dev/null; then break; fi
+            fi
+            ci_run_id=''
+            if [[ "$attempt" -lt 12 ]]; then sleep 5; fi
+          done
+
+          [[ "$ci_run_id" =~ ^[0-9]+$ ]]
+          jq -e '(.total_count == 5) and (.jobs | length == 5) and all(.jobs[]; .conclusion == "success")' ci-jobs.json > /dev/null
+          ci_jobs="$(jq -r '.jobs | sort_by(.name)[] | "- \(.name): job `\(.id)`, conclusion `\(.conclusion)`"' ci-jobs.json)"
 
           evidence_file="$(mktemp)"
           {
@@ -122,21 +146,17 @@ jobs:
             echo "- Production job: \`$hosted_job_id\`"
             echo "- Trigger: \`workflow_run\` from Deploy Pages run \`$EXPECTED_RUN_ID\`"
             echo "- Tested commit: \`$EXPECTED_SHA\`"
-            echo "- CI run: \`$ci_run_id\`, conclusion \`$ci_conclusion\`"
+            echo "- CI run: \`$ci_run_id\`, conclusion \`success\`"
             echo "- Pages deployment: \`$deployment_id\`, status \`$deployment_state\` (status ID \`$deployment_status_id\`)"
             echo
             echo '### CI jobs'
             printf '%s\n' "$ci_jobs"
             echo
             echo '### Hosted deployment metadata'
-            echo '```text'
-            cat metadata-evidence.log
-            echo '```'
+            sed 's/^/    /' metadata-evidence.log
             echo
             echo '### Hosted Chrome acceptance'
-            echo '```text'
-            cat browser-evidence.log
-            echo '```'
+            sed 's/^/    /' browser-evidence.log
           } > "$evidence_file"
 
           gh issue comment 19 --repo "$GITHUB_REPOSITORY" --body-file "$evidence_file"
