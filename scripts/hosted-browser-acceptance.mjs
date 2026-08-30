@@ -90,8 +90,13 @@ try {
   await send('Emulation.setDeviceMetricsOverride', { width: 360, height: 800, deviceScaleFactor: 1, mobile: true });
   await load();
 
-  const identity = await evaluate("({ href: location.href, title: document.title, marker: document.body.innerText.includes('SIMULATION LIVE') })");
-  assert(identity.href === targetUrl && identity.marker, 'the canonical hosted application is loaded');
+  const identity = await evaluate("({ href: location.href, title: document.title, marker: document.querySelector('.live-pill')?.textContent.trim() })");
+  assert(
+    identity.href === targetUrl
+      && identity.title === 'PulseGrid — Living Data Reliability'
+      && identity.marker === 'SIMULATION LIVE',
+    'the canonical hosted application is loaded'
+  );
 
   const semantics = await evaluate(`(() => ({
     lang: document.documentElement.lang,
