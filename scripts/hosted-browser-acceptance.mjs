@@ -45,6 +45,7 @@ try {
   await waitFor('http://127.0.0.1:9222/json/version');
 } catch (error) {
   console.error(`DIAGNOSTIC: Chrome pid=${chrome.pid} exitCode=${chrome.exitCode} signalCode=${chrome.signalCode} killed=${chrome.killed}`);
+  cleanup();
   throw error;
 }
 const targets = await (await fetch('http://127.0.0.1:9222/json/list')).json();
@@ -60,10 +61,17 @@ await new Promise((resolve, reject) => {
 let sequence = 0;
 const pending = new Map();
 const runtimeErrors = [];
+const diagnosticErrors = [];
 socket.addEventListener('message', (event) => {
   const message = JSON.parse(event.data);
-  if (message.method === 'Runtime.exceptionThrown') runtimeErrors.push(message.params.exceptionDetails.text);
-  if (message.method === 'Log.entryAdded' && message.params.entry.level === 'error') runtimeErrors.push(message.params.entry.text);
+  if (message.method === 'Runtime.exceptionThrown') {
+    runtimeErrors.push(message.params.exceptionDetails.text);
+    diagnosticErrors.push({ method: message.method, details: message.params.exceptionDetails });
+  }
+  if (message.method === 'Log.entryAdded' && message.params.entry.level === 'error') {
+    runtimeErrors.push(message.params.entry.text);
+    diagnosticErrors.push({ method: message.method, entry: message.params.entry });
+  }
   if (!message.id) return;
   const waiter = pending.get(message.id);
   if (!waiter) return;
@@ -160,6 +168,7 @@ try {
   assert(fallback.canvasHidden && fallback.fallbackVisible && fallback.controls,
     'WebGL failure preserves the hosted accessible fallback and incident controls');
   if (runtimeErrors.length > 0) console.error(`DIAGNOSTIC_RUNTIME_ERRORS=${JSON.stringify(runtimeErrors)}`);
+  if (diagnosticErrors.length > 0) console.error(`DIAGNOSTIC_CDP_ERRORS=${JSON.stringify(diagnosticErrors)}`);
   assert(runtimeErrors.length === 0, `hosted runtime produced no console/page errors (${runtimeErrors.length})`);
   console.log(JSON.stringify({ target_url: targetUrl, checks: 10, runtime_errors: runtimeErrors.length }));
 } finally {
