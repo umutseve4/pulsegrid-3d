@@ -1,0 +1,63 @@
+name: Hosted Pages Acceptance
+
+on:
+  workflow_run:
+    workflows: ["Deploy Pages"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hosted-pages-acceptance
+  cancel-in-progress: true
+
+jobs:
+  production:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TARGET_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+      EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+      EXPECTED_RUN_ID: ${{ github.event.workflow_run.id }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Verify current hosted deployment metadata
+        run: |
+          node --input-type=module <<'NODE'
+          const url = new URL('deployment.json', process.env.TARGET_URL);
+          url.searchParams.set('run', process.env.EXPECTED_RUN_ID);
+          const expected = {
+            commit_sha: process.env.EXPECTED_SHA,
+            workflow_run_id: process.env.EXPECTED_RUN_ID
+          };
+          let lastError;
+          for (let attempt = 1; attempt <= 24; attempt += 1) {
+            try {
+              const response = await fetch(url, { cache: 'no-store' });
+              console.log(JSON.stringify({ attempt, requested_url: url.href, final_url: response.url, status: response.status }));
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              const actual = await response.json();
+              if (
+                actual.commit_sha !== expected.commit_sha ||
+                actual.workflow_run_id !== expected.workflow_run_id ||
+                Object.keys(actual).sort().join(',') !== 'commit_sha,workflow_run_id'
+              ) throw new Error(`metadata mismatch: ${JSON.stringify(actual)}`);
+              console.log(JSON.stringify(actual));
+              process.exit(0);
+            } catch (error) {
+              lastError = error;
+              console.log(`Attempt ${attempt}/24 failed: ${error.message}`);
+              if (attempt < 24) await new Promise((resolve) => setTimeout(resolve, 5000));
+            }
+          }
+          throw lastError;
+          NODE
+      - name: Exercise the hosted runtime in Chrome
+        run: node scripts/hosted-browser-acceptance.mjs
