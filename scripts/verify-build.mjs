@@ -30,6 +30,9 @@ const html = await readFile(join(root, 'index.html'), 'utf8');
 if (!html.includes('/pulsegrid-3d/assets/')) {
   throw new Error('GitHub Pages base path is missing from built HTML.');
 }
+if (!html.includes('href="/pulsegrid-3d/favicon.svg"') || !output.includes(join(root, 'favicon.svg'))) {
+  throw new Error('The explicit GitHub Pages favicon contract is missing from the build.');
+}
 if (total > 1_500_000) {
   throw new Error(`Compressed transfer budget exceeded: ${total} bytes`);
 }
