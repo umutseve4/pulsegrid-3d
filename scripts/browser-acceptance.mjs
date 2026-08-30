@@ -14,6 +14,7 @@ function reportFailure(error){
   console.error(`::error title=Browser acceptance failed::${detail}`);
   cleanup();
   process.exitCode=1;
+  setTimeout(()=>process.exit(1),100);
 }
 process.once('uncaughtException',reportFailure);
 process.once('unhandledRejection',reportFailure);
