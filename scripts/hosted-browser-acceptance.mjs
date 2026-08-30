@@ -34,56 +34,57 @@ function assert(condition, message) {
 const pageResponse = await waitFor(targetUrl);
 assert(pageResponse.url === targetUrl, `hosted URL resolves without redirect (${targetUrl})`);
 const profile = await mkdtemp(join(tmpdir(), 'pulsegrid-hosted-chrome-'));
-launch('google-chrome', [
-  '--headless=new', '--no-sandbox', '--disable-dev-shm-usage',
-  '--use-angle=swiftshader', '--remote-debugging-port=9222',
-  `--user-data-dir=${profile}`, 'about:blank'
-]);
-await waitFor('http://127.0.0.1:9222/json/version');
-const targets = await (await fetch('http://127.0.0.1:9222/json/list')).json();
-const page = targets.find((item) => item.type === 'page' && item.url === 'about:blank')
-  ?? targets.find((item) => item.type === 'page');
-if (!page) throw new Error('Chrome did not expose a page target.');
-
-const socket = new WebSocket(page.webSocketDebuggerUrl);
-await new Promise((resolve, reject) => {
-  socket.addEventListener('open', resolve, { once: true });
-  socket.addEventListener('error', reject, { once: true });
-});
-let sequence = 0;
-const pending = new Map();
-const runtimeErrors = [];
-socket.addEventListener('message', (event) => {
-  const message = JSON.parse(event.data);
-  if (message.method === 'Runtime.exceptionThrown') runtimeErrors.push(message.params.exceptionDetails.text);
-  if (message.method === 'Log.entryAdded' && message.params.entry.level === 'error') runtimeErrors.push(message.params.entry.text);
-  if (!message.id) return;
-  const waiter = pending.get(message.id);
-  if (!waiter) return;
-  pending.delete(message.id);
-  message.error ? waiter.reject(new Error(message.error.message)) : waiter.resolve(message.result);
-});
-function send(method, params = {}) {
-  const id = ++sequence;
-  socket.send(JSON.stringify({ id, method, params }));
-  return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
-}
-async function evaluate(expression) {
-  const result = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
-  if (result.exceptionDetails) throw new Error(result.exceptionDetails.text);
-  return result.result.value;
-}
-async function load() {
-  await send('Page.navigate', { url: targetUrl });
-  for (let attempt = 1; attempt <= 60; attempt += 1) {
-    if (await evaluate("document.readyState === 'complete' && Boolean(document.querySelector('#pipeline-table tr'))")) return;
-    await sleep(250);
-  }
-  const state = await evaluate("({ href: location.href, title: document.title, readyState: document.readyState, rows: document.querySelectorAll('#pipeline-table tr').length, body: document.body?.innerText.slice(0, 240) })");
-  throw new Error(`Hosted application did not become ready: ${JSON.stringify(state)}`);
-}
-
+let socket;
 try {
+  launch('google-chrome', [
+    '--headless=new', '--no-sandbox', '--disable-dev-shm-usage',
+    '--use-angle=swiftshader', '--remote-debugging-port=9222',
+    `--user-data-dir=${profile}`, 'about:blank'
+  ]);
+  await waitFor('http://127.0.0.1:9222/json/version');
+  const targets = await (await fetch('http://127.0.0.1:9222/json/list')).json();
+  const page = targets.find((item) => item.type === 'page' && item.url === 'about:blank')
+    ?? targets.find((item) => item.type === 'page');
+  if (!page) throw new Error('Chrome did not expose a page target.');
+
+  socket = new WebSocket(page.webSocketDebuggerUrl);
+  await new Promise((resolve, reject) => {
+    socket.addEventListener('open', resolve, { once: true });
+    socket.addEventListener('error', reject, { once: true });
+  });
+  let sequence = 0;
+  const pending = new Map();
+  const runtimeErrors = [];
+  socket.addEventListener('message', (event) => {
+    const message = JSON.parse(event.data);
+    if (message.method === 'Runtime.exceptionThrown') runtimeErrors.push(message.params.exceptionDetails.text);
+    if (message.method === 'Log.entryAdded' && message.params.entry.level === 'error') runtimeErrors.push(message.params.entry.text);
+    if (!message.id) return;
+    const waiter = pending.get(message.id);
+    if (!waiter) return;
+    pending.delete(message.id);
+    message.error ? waiter.reject(new Error(message.error.message)) : waiter.resolve(message.result);
+  });
+  function send(method, params = {}) {
+    const id = ++sequence;
+    socket.send(JSON.stringify({ id, method, params }));
+    return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
+  }
+  async function evaluate(expression) {
+    const result = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
+    if (result.exceptionDetails) throw new Error(result.exceptionDetails.text);
+    return result.result.value;
+  }
+  async function load() {
+    await send('Page.navigate', { url: targetUrl });
+    for (let attempt = 1; attempt <= 60; attempt += 1) {
+      if (await evaluate("document.readyState === 'complete' && Boolean(document.querySelector('#pipeline-table tr'))")) return;
+      await sleep(250);
+    }
+    const state = await evaluate("({ href: location.href, title: document.title, readyState: document.readyState, rows: document.querySelectorAll('#pipeline-table tr').length, body: document.body?.innerText.slice(0, 240) })");
+    throw new Error(`Hosted application did not become ready: ${JSON.stringify(state)}`);
+  }
+
   await send('Page.enable');
   await send('Runtime.enable');
   await send('Log.enable');
@@ -155,6 +156,6 @@ try {
   assert(runtimeErrors.length === 0, `hosted runtime produced no console/page errors (${runtimeErrors.length})`);
   console.log(JSON.stringify({ target_url: targetUrl, checks: 10, runtime_errors: runtimeErrors.length }));
 } finally {
-  socket.close();
+  socket?.close();
   cleanup();
 }
