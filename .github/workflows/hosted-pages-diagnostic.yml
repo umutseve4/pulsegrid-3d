@@ -12,6 +12,10 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        attempt: [1, 2, 3]
     env:
       TARGET_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
       GH_TOKEN: ${{ github.token }}
@@ -30,7 +34,7 @@ jobs:
           status=0
           node scripts/hosted-browser-acceptance.mjs 2>&1 | tee "$log_file" || status=${PIPESTATUS[0]}
           {
-            echo '### Post-merge hosted diagnostic'
+            echo "### Post-merge hosted diagnostic — attempt ${{ matrix.attempt }}"
             echo '```text'
             tail -n 40 "$log_file"
             echo '```'
