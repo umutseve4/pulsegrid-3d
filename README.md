@@ -15,7 +15,7 @@
 ## Local development
 
 ```bash
-npm install
+npm ci --ignore-scripts
 npm run dev
 ```
 
@@ -24,7 +24,10 @@ Quality gates:
 ```bash
 npm run check
 npm run build
+node scripts/browser-acceptance.mjs
 ```
+
+The browser acceptance gate builds and previews the app in headless Chrome, then verifies semantic evidence, 360 px overflow, keyboard interaction, reduced motion, the deterministic incident lifecycle, and the accessible WebGL fallback.
 
 The build gate verifies the GitHub Pages base path and enforces compressed budgets of **1,500,000 bytes total** and **300,000 JavaScript bytes**.
 
