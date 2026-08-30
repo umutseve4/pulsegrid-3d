@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#05070a" />
+    <meta name="description" content="PulseGrid is a cinematic 3D data reliability laboratory where pipelines fail, quarantine, replay, and recover." />
+    <title>PulseGrid — Living Data Reliability</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#system-data">Skip to system data</a>
+    <div id="app">
+      <canvas id="scene" aria-label="Interactive 3D view of the PulseGrid data city" tabindex="0"></canvas>
+      <div class="atmosphere" aria-hidden="true"></div>
+
+      <header class="topbar">
+        <a class="brand" href="#top" aria-label="PulseGrid home">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span>PULSEGRID</span>
+        </a>
+        <div class="live-pill"><span aria-hidden="true"></span> SIMULATION LIVE</div>
+        <button class="utility-button" id="motion-toggle" type="button" aria-pressed="false">Reduce motion</button>
+      </header>
+
+      <main id="top">
+        <section class="hero" aria-labelledby="hero-title">
+          <p class="eyebrow"><span>01</span> A LIVING DATA RELIABILITY LAB</p>
+          <h1 id="hero-title">Every event<br /><em>leaves a pulse.</em></h1>
+          <p class="lede">Enter a city built from data infrastructure. Watch one incident move from failure to quarantine, replay, and verified recovery.</p>
+          <div class="hero-actions">
+            <button class="primary-button" id="inject-hero" type="button">Inject an incident <span aria-hidden="true">↗</span></button>
+            <a class="text-link" href="#system-data">Explore the evidence <span aria-hidden="true">↓</span></a>
+          </div>
+        </section>
+
+        <aside class="telemetry glass" aria-label="Live system telemetry">
+          <div class="panel-kicker">SYSTEM PULSE <span id="clock">00:00:00 UTC</span></div>
+          <div class="health-row">
+            <div class="health-orb" data-state="healthy" aria-hidden="true"><span></span></div>
+            <div><strong id="health-label">NOMINAL</strong><small id="health-detail">All districts synchronized</small></div>
+          </div>
+          <dl class="metrics">
+            <div><dt>THROUGHPUT</dt><dd><span id="throughput">48.2K</span><small>evt/s</small></dd></div>
+            <div><dt>P95 LATENCY</dt><dd><span id="latency">84</span><small>ms</small></dd></div>
+            <div><dt>VALID EVENTS</dt><dd><span id="validity">99.97</span><small>%</small></dd></div>
+          </dl>
+        </aside>
+
+        <nav class="district-nav glass" aria-label="Pipeline districts">
+          <p>PIPELINE DISTRICTS</p>
+          <button type="button" data-district="0" aria-current="true"><span>01</span> Ingestion <small>ACTIVE</small></button>
+          <button type="button" data-district="1"><span>02</span> Validation <small>ACTIVE</small></button>
+          <button type="button" data-district="2"><span>03</span> Transformation <small>ACTIVE</small></button>
+          <button type="button" data-district="3"><span>04</span> Delivery <small>ACTIVE</small></button>
+        </nav>
+
+        <div class="scroll-cue" aria-hidden="true"><span></span> SCROLL TO DESCEND</div>
+      </main>
+
+      <section class="control-deck glass" aria-labelledby="scenario-title">
+        <div>
+          <p class="panel-kicker">INCIDENT SCENARIO</p>
+          <h2 id="scenario-title"><span id="scenario-index">01</span> <span id="scenario-name">System nominal</span></h2>
+        </div>
+        <div class="timeline" aria-hidden="true"><span id="timeline-progress"></span></div>
+        <p id="scenario-copy">Deterministic event streams are moving through every district.</p>
+        <button class="scenario-button" id="scenario-button" type="button">Inject failure</button>
+      </section>
+
+      <section id="system-data" class="evidence-section" aria-labelledby="evidence-title">
+        <div class="evidence-copy">
+          <p class="eyebrow"><span>02</span> OBSERVABILITY AS ARCHITECTURE</p>
+          <h2 id="evidence-title">Reliability you can<br /><em>see and verify.</em></h2>
+          <p>The city is not decoration. Height maps throughput, light density maps utilization, and every incident state has a matching text record.</p>
+        </div>
+        <div class="evidence-table-wrap glass">
+          <table>
+            <caption>Accessible pipeline status equivalent</caption>
+            <thead><tr><th>District</th><th>Status</th><th>Events/s</th><th>P95</th></tr></thead>
+            <tbody id="pipeline-table"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="webgl-fallback" id="fallback" role="status" hidden>
+        <p class="eyebrow">STATIC SYSTEM VIEW</p>
+        <h2>The city is still observable.</h2>
+        <p>WebGL is unavailable, so PulseGrid preserved its system telemetry and incident controls in an accessible data view.</p>
+      </div>
+
+      <div id="announcer" class="sr-only" aria-live="polite"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
