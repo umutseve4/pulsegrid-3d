@@ -107,7 +107,7 @@ jobs:
             gh api "repos/$GITHUB_REPOSITORY/deployments?sha=$EXPECTED_SHA&environment=github-pages&per_page=10" > deployments.json
             while IFS= read -r candidate_id; do
               gh api "repos/$GITHUB_REPOSITORY/deployments/$candidate_id/statuses?per_page=1" > deployment-statuses.json
-              if jq -e --arg run_path "/actions/runs/$EXPECTED_RUN_ID" '((.[0].state // "") == "success") and ((.[0].log_url // "") | contains($run_path))' deployment-statuses.json > /dev/null; then
+              if jq -e --arg expected_run_id "$EXPECTED_RUN_ID" '((.[0].state // "") == "success") and (((try ((.[0].log_url // "") | capture("/actions/runs/(?<id>[0-9]+)(?:/|$|[?#])").id) catch "")) == $expected_run_id)' deployment-statuses.json > /dev/null; then
                 deployment_id="$candidate_id"
                 deployment_status_id="$(jq -r '.[0].id' deployment-statuses.json)"
                 deployment_state="$(jq -r '.[0].state' deployment-statuses.json)"
@@ -142,12 +142,12 @@ jobs:
           {
             echo "## Hosted Pages Acceptance #$HOSTED_RUN_NUMBER evidence"
             echo
-            echo "- Hosted run: \`$HOSTED_RUN_ID\`"
-            echo "- Production job: \`$hosted_job_id\`"
-            echo "- Trigger: \`workflow_run\` from Deploy Pages run \`$EXPECTED_RUN_ID\`"
-            echo "- Tested commit: \`$EXPECTED_SHA\`"
-            echo "- CI run: \`$ci_run_id\`, conclusion \`success\`"
-            echo "- Pages deployment: \`$deployment_id\`, status \`$deployment_state\` (status ID \`$deployment_status_id\`)"
+            echo "- Hosted run: \\0060$HOSTED_RUN_ID\`"
+            echo "- Production job: \\0060$hosted_job_id\`"
+            echo "- Trigger: \\0060workflow_run\` from Deploy Pages run \\0060$EXPECTED_RUN_ID\`"
+            echo "- Tested commit: \\0060$EXPECTED_SHA\`"
+            echo "- CI run: \\0060$ci_run_id\`, conclusion \\0060success\`"
+            echo "- Pages deployment: \\0060$deployment_id\`, status \\0060$deployment_state\` (status ID \\0060$deployment_status_id\`)"
             echo
             echo '### CI jobs'
             printf '%s\n' "$ci_jobs"
