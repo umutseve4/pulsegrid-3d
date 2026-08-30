@@ -109,7 +109,7 @@ try{
     for(let i=0;i<5;i++){labels.push(document.querySelector('#health-label').textContent);button.click();}
     return labels;
   })()`);
-  assert(JSON.stringify(lifecycle)===JSON.stringify(['NOMINAL','SCHEMA DRIFT','CONTAINED','REPLAY ACTIVE','RECOVERY VERIFIED']),'incident lifecycle is deterministic in the browser');
+  assert(JSON.stringify(lifecycle)===JSON.stringify(['NOMINAL','DEGRADED','CONTAINED','REPLAYING','RECOVERED']),'incident lifecycle is deterministic in the browser');
 
   await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
   await load();
