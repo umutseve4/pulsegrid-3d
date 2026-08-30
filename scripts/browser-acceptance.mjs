@@ -126,6 +126,10 @@ try{
   await load();
   const fallback=await evaluate(`(() => ({canvasHidden:document.querySelector('#scene').hidden,fallbackVisible:!document.querySelector('#fallback').hidden,controls:Boolean(document.querySelector('#scenario-button'))}))()`);
   assert(fallback.canvasHidden && fallback.fallbackVisible && fallback.controls,'WebGL failure preserves the accessible fallback and incident controls');
+  socket.close();
+  cleanup();
+  setTimeout(()=>process.exit(0),100);
+  await new Promise(()=>{});
 } finally {
   socket.close();
   cleanup();
