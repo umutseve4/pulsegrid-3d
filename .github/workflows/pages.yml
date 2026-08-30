@@ -24,6 +24,12 @@ jobs:
       - run: npm install --ignore-scripts
       - run: npm run check
       - run: npm run build
+      - name: Write deployment provenance
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          printf '{"commit_sha":"%s","workflow_run_id":"%s"}\n' "$COMMIT_SHA" "$RUN_ID" > dist/deployment.json
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa
         with:

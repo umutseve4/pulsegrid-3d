@@ -49,6 +49,8 @@ The production build uses Vite base path `/pulsegrid-3d/` and deploys to GitHub 
 
 Target URL: <https://umutseve4.github.io/pulsegrid-3d/>
 
+Every Pages artifact includes `deployment.json` at the site root. Its `commit_sha` is the exact revision packaged by the deployment workflow, and `workflow_run_id` links the artifact to its GitHub Actions run.
+
 ## License
 
 MIT
