@@ -24,7 +24,6 @@ jobs:
           node-version: '22'
       - run: npm install --ignore-scripts
       - run: npx tsc --noEmit
-        name: TypeScript
 
   test:
     runs-on: ubuntu-latest
@@ -36,9 +35,8 @@ jobs:
           node-version: '22'
       - run: npm install --ignore-scripts
       - run: npm test
-        name: Vitest
 
-  build:
+  bundle:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -48,6 +46,15 @@ jobs:
           node-version: '22'
       - run: npm install --ignore-scripts
       - run: npx vite build
-        name: Vite production bundle
+
+  budgets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts
+      - run: npx vite build
       - run: node scripts/verify-build.mjs
-        name: Transfer budgets and Pages base
