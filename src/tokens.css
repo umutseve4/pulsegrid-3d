@@ -1,0 +1,14 @@
+:root{
+  --ink:#05070a;
+  --paper:#edfafa;
+  --muted:#7f9194;
+  --line:rgba(170,242,236,.14);
+  --cyan:#55f7e4;
+  --violet:#9d7cff;
+  --red:#ff5d6c;
+  --amber:#ffbd59;
+  --lime:#a4ff84;
+  --display:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --sans:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+}
