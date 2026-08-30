@@ -22,7 +22,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
-      - run: npm install --ignore-scripts
+      - run: npm ci --ignore-scripts
       - run: npx tsc --noEmit
 
   test:
@@ -33,7 +33,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
-      - run: npm install --ignore-scripts
+      - run: npm ci --ignore-scripts
       - run: npm test
 
   bundle:
@@ -44,7 +44,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
-      - run: npm install --ignore-scripts
+      - run: npm ci --ignore-scripts
       - run: npx vite build
 
   budgets:
@@ -55,6 +55,6 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
-      - run: npm install --ignore-scripts
+      - run: npm ci --ignore-scripts
       - run: npx vite build
       - run: node scripts/verify-build.mjs
