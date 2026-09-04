@@ -17,6 +17,6 @@
     "@types/three": "0.179.0",
     "typescript": "5.9.2",
     "vite": "7.3.2",
-    "vitest": "3.2.6"
+    "vitest": "3.2.7"
   }
 }
