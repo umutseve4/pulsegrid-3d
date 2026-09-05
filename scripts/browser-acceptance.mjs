@@ -20,24 +20,33 @@ process.once('uncaughtException',reportFailure);
 process.once('unhandledRejection',reportFailure);
 function launch(command,args){
   const child=spawn(command,args,{stdio:['ignore','pipe','pipe']});
+  child.label=`${command} ${args.join(' ')}`;
+  child.exited=null;
+  child.on('exit',(code,signal)=>{child.exited={code,signal};});
   processes.push(child);
   child.stdout.on('data',data=>process.stdout.write(data));
   child.stderr.on('data',data=>process.stderr.write(data));
   return child;
 }
-async function waitFor(url,attempts=60){
+async function waitFor(url,{attempts=240,child=null}={}){
+  const startedAt=Date.now();
+  let lastError='none';
   for(let i=0;i<attempts;i++){
-    try{const response=await fetch(url);if(response.ok)return response;}catch{}
+    if(child?.exited){
+      throw new Error(`${child.label} exited with code ${child.exited.code} signal ${child.exited.signal} while waiting for ${url}`);
+    }
+    try{const response=await fetch(url);if(response.ok)return response;lastError=`HTTP ${response.status}`;}catch(error){lastError=String(error?.cause?.code??error?.message??error);}
     await sleep(250);
   }
-  throw new Error(`Timed out waiting for ${url}`);
+  const elapsed=((Date.now()-startedAt)/1000).toFixed(1);
+  throw new Error(`Timed out waiting for ${url} after ${attempts} attempts over ${elapsed}s; last transport error: ${lastError}`);
 }
 
 const profile=await mkdtemp(join(tmpdir(),'pulsegrid-chrome-'));
-launch('npm',['run','preview','--','--host','127.0.0.1','--port','4173']);
-await waitFor('http://127.0.0.1:4173/pulsegrid-3d/');
-launch('google-chrome',['--headless=new','--no-sandbox','--disable-dev-shm-usage','--use-angle=swiftshader','--remote-debugging-port=9222',`--user-data-dir=${profile}`,'about:blank']);
-await waitFor('http://127.0.0.1:9222/json/version');
+const preview=launch('npm',['run','preview','--','--host','127.0.0.1','--port','4173']);
+await waitFor('http://127.0.0.1:4173/pulsegrid-3d/',{child:preview});
+const chrome=launch('google-chrome',['--headless=new','--no-sandbox','--disable-dev-shm-usage','--use-angle=swiftshader','--remote-debugging-port=9222',`--user-data-dir=${profile}`,'about:blank']);
+await waitFor('http://127.0.0.1:9222/json/version',{child:chrome});
 const targets=await (await fetch('http://127.0.0.1:9222/json/list')).json();
 const page=targets.find(target=>target.type==='page'&&target.url==='about:blank')??targets.find(target=>target.type==='page');
 if(!page)throw new Error(`Chrome did not expose a page target: ${JSON.stringify(targets.map(({type,url})=>({type,url})))}`);
@@ -65,7 +74,7 @@ async function evaluate(expression){
 }
 async function load(){
   await send('Page.navigate',{url:'http://127.0.0.1:4173/pulsegrid-3d/'});
-  for(let i=0;i<60;i++){
+  for(let i=0;i<160;i++){
     if(await evaluate("document.readyState === 'complete' && Boolean(document.querySelector('#pipeline-table tr'))"))return;
     await sleep(250);
   }
