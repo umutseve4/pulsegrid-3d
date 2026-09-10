@@ -1,0 +1,116 @@
+name: align-types-three
+
+# Issue #26. `three` is at 0.185.1 while `@types/three` is at 0.179.0, so the
+# type layer describes a runtime six minors old and `skipLibCheck: true` hides
+# the disagreement. The issue is explicit that `package-lock.json` must not be
+# hand-edited: a lock file is only correct if a real resolver produced it.
+#
+# This workflow is that resolver run. It picks the newest `@types/three` whose
+# minor matches the installed `three`, installs it, commits what npm actually
+# wrote, and only then runs `tsc`. If the aligned types surface errors, that is
+# the intended outcome of the issue and the job goes red with the errors
+# printed, rather than the bump being abandoned.
+
+on:
+  push:
+    branches:
+      - "deps/**"
+    paths:
+      - ".github/workflows/align-types-three.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: align-types-three-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  align:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+
+      - name: Choose the @types/three release that matches the installed three
+        id: pick
+        run: |
+          node - <<'JS'
+          const fs = require('fs');
+          const { execFileSync } = require('child_process');
+
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const runtime = String(pkg.dependencies.three).replace(/^[^0-9]*/, '');
+          const [major, minor] = runtime.split('.');
+          console.log(`three (runtime): ${runtime}`);
+
+          const all = JSON.parse(
+            execFileSync('npm', ['view', '@types/three', 'versions', '--json'], {
+              encoding: 'utf8',
+            })
+          );
+          const wanted = all.filter((v) => v.startsWith(`${major}.${minor}.`));
+          if (wanted.length === 0) {
+            const tail = all.slice(-8).join(', ');
+            console.log(
+              `::error title=no matching @types/three::nothing published for ` +
+              `${major}.${minor}.x; newest available: ${tail}`
+            );
+            process.exit(1);
+          }
+          const chosen = wanted[wanted.length - 1];
+          console.log(`@types/three chosen: ${chosen}`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${chosen}\n`);
+          JS
+
+      - name: Install it with npm, not by hand
+        run: |
+          npm install --ignore-scripts --save-exact --save-dev \
+            "@types/three@${{ steps.pick.outputs.version }}"
+          node - <<'JS'
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          const declared = pkg.devDependencies['@types/three'];
+          const locked = lock.packages['node_modules/@types/three'].version;
+          console.log(`package.json: ${declared}`);
+          console.log(`package-lock.json: ${locked}`);
+          if (declared !== locked) {
+            console.log('::error title=lock disagrees with manifest::' +
+              `${declared} vs ${locked}`);
+            process.exit(1);
+          }
+          const runtimeMinor = pkg.dependencies.three.split('.').slice(0, 2).join('.');
+          const typesMinor = locked.split('.').slice(0, 2).join('.');
+          if (runtimeMinor !== typesMinor) {
+            console.log('::error title=still misaligned::' +
+              `three ${runtimeMinor}.x vs @types/three ${typesMinor}.x`);
+            process.exit(1);
+          }
+          console.log('runtime and types now share a minor: OK');
+          JS
+
+      - name: Commit what npm wrote
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "already aligned; nothing to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "deps: align @types/three with three ${{ steps.pick.outputs.version }}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      # The point of the bump is to stop hiding disagreements, so the type
+      # check runs against the aligned tree here and its errors, if any, are
+      # printed in full. This step is allowed to fail the job.
+      - name: Typecheck against the aligned types
+        run: |
+          rm -rf node_modules
+          npm ci --ignore-scripts
+          npx tsc --noEmit
